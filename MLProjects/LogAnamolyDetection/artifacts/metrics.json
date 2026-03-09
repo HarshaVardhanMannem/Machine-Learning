@@ -1,0 +1,7 @@
+{
+  "row_count": 2000,
+  "predicted_anomalies": 100,
+  "predicted_anomaly_rate": 0.05,
+  "detector_agreement_rate": 0.05,
+  "evaluation_mode": "unsupervised_only"
+}
