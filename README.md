@@ -1,18 +1,27 @@
-# 🤖 Machine Learning Concepts — Hands-On Experiments
+# 🤖 Machine Learning — Concepts & Projects
 
-> A rigorous collection of Jupyter notebooks exploring foundational and intermediate Machine Learning concepts through real-world datasets, controlled experiments, and visualized results.
+> A rigorous collection of Jupyter notebooks and end-to-end projects exploring foundational and intermediate Machine Learning concepts through real-world datasets, controlled experiments, and visualized results.
 
 ---
 
 ## 📌 Overview
 
-This repository contains carefully designed experiments that go beyond textbook definitions. Each notebook is built to **demonstrate the *why* behind each concept**, using real datasets, side-by-side comparisons, and performance metrics.
+This repository contains carefully designed experiments and end-to-end projects that go beyond textbook definitions. Each notebook is built to **demonstrate the *why* behind each concept**, using real datasets, side-by-side comparisons, and performance metrics. The projects section extends this into production-oriented implementations.
 
 Whether you're a practitioner brushing up on fundamentals, a student building intuition, or a recruiter evaluating technical depth — this collection highlights the engineering discipline required to build reliable ML systems.
 
 ---
 
-## 🗂️ Experiments
+## 🗂️ Repository Sections
+
+| Section | Description |
+|---|---|
+| [`ML concepts/`](ML%20concepts/) | Jupyter notebooks covering foundational and intermediate ML concepts |
+| [`MLProjects/`](MLProjects/) | End-to-end, production-oriented ML projects |
+
+---
+
+## 📒 ML Concepts Experiments
 
 ### 1. 🖥️ CPU vs. GPU Performance Benchmark
 **Notebook:** [`ML concepts/CPU_vs_GPU.ipynb`](ML%20concepts/CPU_vs_GPU.ipynb)
@@ -108,6 +117,28 @@ Whether you're a practitioner brushing up on fundamentals, a student building in
 
 ---
 
+### 5. 📐 Euclidean vs. Manhattan Distance in Machine Learning
+**Notebook:** [`ML concepts/Euclidean_vs_Manhattan_Distance_ML.ipynb`](ML%20concepts/Euclidean_vs_Manhattan_Distance_ML.ipynb)
+
+**Dataset:** Synthetic 2D dataset (300 samples, 3 clusters, generated with `sklearn.datasets.make_blobs`)
+
+**Problem:** How does the choice of distance metric affect the behaviour of ML algorithms like KNN, K-Means, and DBSCAN?
+
+**Approach:**
+- Visualised geometric intuition: shortest straight-line path (Euclidean) vs. grid-path distance (Manhattan)
+- Compared **KNN** classification decision boundaries under both metrics
+- Compared **K-Means** (Euclidean) vs. **K-Medians** (Manhattan) clustering shapes
+- Analysed outlier sensitivity and high-dimensional behaviour of each metric
+- Provided a practical decision matrix for choosing the right metric
+
+**Key Findings:**
+- Euclidean distance is better suited to continuous geometric data and low-dimensional spaces
+- Manhattan distance is more robust to outliers and performs better on sparse or high-dimensional data
+- Decision boundary shapes and cluster assignments differ meaningfully between the two metrics
+- Practical guidance: use Euclidean for image/spatial data; use Manhattan for text, NLP, or grid-structured data
+
+---
+
 ## 🧠 Core ML Concepts Covered
 
 | Concept | Notebook |
@@ -121,6 +152,26 @@ Whether you're a practitioner brushing up on fundamentals, a student building in
 | ROC curve & AUC | Classification Metrics Demo |
 | Precision-Recall tradeoffs | Classification Metrics Demo |
 | Model comparison (Logistic Regression vs. Decision Tree) | Standardization in ML |
+| Distance metrics (Euclidean vs. Manhattan) | Euclidean vs. Manhattan Distance |
+| KNN, K-Means, K-Medians, DBSCAN | Euclidean vs. Manhattan Distance |
+| Outlier sensitivity analysis | Euclidean vs. Manhattan Distance |
+
+---
+
+## 🚀 ML Projects
+
+### 🔍 Log Anomaly Detection
+**Project:** [`MLProjects/LogAnamolyDetection/`](MLProjects/LogAnamolyDetection/)
+
+A **production-grade log anomaly detection system** for structured log streams. Trains on historical HDFS logs, persists a detector and threshold, and scores new log batches in near real time.
+
+**Highlights:**
+- **Isolation Forest** trained on numeric + one-hot + TF-IDF features from structured log data
+- Real-time / micro-batch inference via a `score_batch()` API
+- Hybrid evaluation: Precision, Recall, F1, ROC-AUC, PR-AUC when labels are available; fully unsupervised otherwise
+- Persists model, preprocessor, vectorizer, and threshold to `artifacts/` for deployment
+
+📖 [Full project documentation →](MLProjects/LogAnamolyDetection/README.md)
 
 ---
 
@@ -141,14 +192,24 @@ Whether you're a practitioner brushing up on fundamentals, a student building in
 
 ```
 Machine-Learning/
-└── ML concepts/
-    ├── data/
-    │   ├── Social_Network_Ads.csv       # Social network purchase prediction dataset
-    │   └── wine_data.csv                # Wine classification dataset
-    ├── CPU_vs_GPU.ipynb                  # CPU vs. GPU matrix multiplication benchmark
-    ├── Standardization in ML.ipynb      # StandardScaler experiment with model comparison
-    ├── Normalization in ML.ipynb        # MinMaxScaler experiment with wine dataset
-    └── Accuracy_Precision_Recall_F1 score  in ML Demo.ipynb  # Full classification metrics demo
+├── ML concepts/                         # Foundational concept notebooks
+│   ├── data/
+│   │   ├── Social_Network_Ads.csv       # Social network purchase prediction dataset
+│   │   └── wine_data.csv                # Wine classification dataset
+│   ├── CPU_vs_GPU.ipynb                 # CPU vs. GPU matrix multiplication benchmark
+│   ├── Standardization in ML.ipynb     # StandardScaler experiment with model comparison
+│   ├── Normalization in ML.ipynb       # MinMaxScaler experiment with wine dataset
+│   ├── Accuracy_Precision_Recall_F1 score  in ML Demo.ipynb  # Classification metrics demo
+│   └── Euclidean_vs_Manhattan_Distance_ML.ipynb              # Distance metrics comparison
+└── MLProjects/                          # End-to-end production ML projects
+    └── LogAnamolyDetection/             # Real-time log anomaly detection system
+        ├── Log Anamoly Detetction.ipynb
+        ├── log_anomaly_pipeline.py
+        ├── log_anomaly_config.py
+        ├── log_anomaly_utils.py
+        ├── run_large_volume.py
+        ├── data/
+        └── artifacts/
 ```
 
 ---
@@ -169,7 +230,7 @@ cd Machine-Learning
 jupyter notebook
 ```
 
-Navigate to `ML concepts/` and open any notebook to explore.
+Navigate to `ML concepts/` or `MLProjects/` and open any notebook to explore.
 
 > **Note:** The CPU vs. GPU benchmark requires a CUDA-compatible GPU for GPU timing. It will still run on CPU-only machines and report CPU timings.
 
@@ -182,6 +243,7 @@ Navigate to `ML concepts/` and open any notebook to explore.
 - **Model-specific analysis** — scale-sensitive (Logistic Regression) vs. scale-invariant (Decision Tree) models tested separately
 - **Metric selection by context** — recall prioritized over accuracy in the medical classification task
 - **Visual validation** — all transformations and results verified through distribution plots and scatter plots
+- **Production-oriented projects** — pipelines with persisted artifacts, configurable thresholds, and real-time inference APIs
 
 ---
 
