@@ -1,3 +1,8 @@
+"""
+Utilities for the log anomaly detection pipeline: block ID extraction,
+metrics I/O, and optional plotting for triage and dashboards.
+"""
+
 from __future__ import annotations
 
 import json

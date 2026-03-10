@@ -1,5 +1,14 @@
+"""
+Production-grade log anomaly detection pipeline.
+
+Supports batch training (run_pipeline) and real-time / micro-batch inference (score_batch)
+using persisted model, preprocessor, and vectorizer artifacts.
+"""
+
 from __future__ import annotations
 
+import json
+import logging
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any
@@ -29,9 +38,11 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from log_anomaly_config import PipelineConfig, get_default_config
 from log_anomaly_utils import ensure_directory, extract_block_id, save_metrics_json
 
+logger = logging.getLogger(__name__)
 
 ARTIFACT_MODEL_NAME = "isolation_forest.joblib"
 ARTIFACT_PREPROCESSOR_NAME = "preprocessor.joblib"
+ARTIFACT_VECTORIZER_NAME = "tfidf_vectorizer.joblib"
 
 
 def download_file(url: str, destination: Path) -> Path:
@@ -43,13 +54,19 @@ def download_file(url: str, destination: Path) -> Path:
 
 
 def load_logs(config: PipelineConfig | None = None) -> pd.DataFrame:
+    """Load and validate structured log data; download from URL if missing."""
     config = config or get_default_config()
     if not config.structured_logs_path.exists():
         if not config.auto_download_structured_logs:
             raise FileNotFoundError(f"Missing structured logs at {config.structured_logs_path}")
+        logger.info("Downloading structured logs from %s", config.structured_logs_url)
         download_file(config.structured_logs_url, config.structured_logs_path)
 
     logs_df = pd.read_csv(config.structured_logs_path)
+    logger.info("Loaded %d log lines from %s", len(logs_df), config.structured_logs_path)
+    if config.max_training_rows is not None and len(logs_df) > config.max_training_rows:
+        logs_df = logs_df.sample(n=config.max_training_rows, random_state=config.random_state).sort_index().reset_index(drop=True)
+        logger.info("Sampled down to %d rows (max_training_rows=%d)", len(logs_df), config.max_training_rows)
     validate_schema(logs_df, config)
     logs_df = logs_df.copy()
     logs_df["SequenceID"] = np.arange(len(logs_df))
@@ -306,22 +323,34 @@ def save_artifacts(
     scored_df: pd.DataFrame,
     preprocessor: ColumnTransformer,
     model: IsolationForest,
+    vectorizer: TfidfVectorizer,
     metrics: dict[str, Any],
     config: PipelineConfig,
 ) -> None:
+    """Persist scored results, model, preprocessor, vectorizer, and metrics for inference."""
     ensure_directory(config.artifacts_dir)
+    threshold = float(scored_df["anomaly_threshold"].iloc[0])
+    metrics["anomaly_threshold"] = threshold
+    save_metrics_json(metrics, config.metrics_path)
     scored_df.to_csv(config.scored_logs_path, index=False)
     scored_df.nlargest(config.top_n_anomalies, "anomaly_score").to_csv(
         config.top_anomalies_path,
         index=False,
     )
-    save_metrics_json(metrics, config.metrics_path)
     joblib.dump(model, config.artifacts_dir / ARTIFACT_MODEL_NAME)
     joblib.dump(preprocessor, config.artifacts_dir / ARTIFACT_PREPROCESSOR_NAME)
+    joblib.dump(vectorizer, config.artifacts_dir / ARTIFACT_VECTORIZER_NAME)
+    logger.info(
+        "Saved artifacts to %s (model, preprocessor, vectorizer, threshold=%.4f)",
+        config.artifacts_dir,
+        threshold,
+    )
 
 
 def run_pipeline(config: PipelineConfig | None = None) -> dict[str, Any]:
+    """Run the full anomaly detection pipeline: load data, train model, score, evaluate, save artifacts."""
     config = config or get_default_config()
+    logger.info("Starting anomaly detection pipeline")
     logs_df = load_logs(config)
     labels_df = load_optional_labels(config)
     labeled_logs_df = attach_labels(logs_df, labels_df)
@@ -332,7 +361,13 @@ def run_pipeline(config: PipelineConfig | None = None) -> dict[str, Any]:
     scored_df = add_dbscan_comparison(scored_df, combined_matrix, config)
     metrics = evaluate_predictions(scored_df)
     pca_df = build_pca_frame(scored_df, combined_matrix, config)
-    save_artifacts(scored_df, preprocessor, model, metrics, config)
+    save_artifacts(scored_df, preprocessor, model, vectorizer, metrics, config)
+    logger.info(
+        "Pipeline complete: %d rows, %d anomalies (%.2f%%)",
+        len(scored_df),
+        int(scored_df["is_anomaly"].sum()),
+        100 * scored_df["is_anomaly"].mean(),
+    )
 
     return {
         "config": asdict(config),
@@ -346,3 +381,84 @@ def run_pipeline(config: PipelineConfig | None = None) -> dict[str, Any]:
         "model": model,
         "labels_df": labels_df,
     }
+
+
+def load_artifacts(
+    config: PipelineConfig | None = None,
+    artifacts_dir: Path | None = None,
+) -> dict[str, Any]:
+    """
+    Load persisted model, preprocessor, vectorizer, and threshold for real-time inference.
+    Use with score_batch() to score new log streams or micro-batches.
+    """
+    config = config or get_default_config()
+    base = Path(artifacts_dir) if artifacts_dir is not None else config.artifacts_dir
+    if not (base / ARTIFACT_MODEL_NAME).exists():
+        raise FileNotFoundError(
+            f"Artifacts not found in {base}. Run run_pipeline() first to train and save artifacts."
+        )
+    model = joblib.load(base / ARTIFACT_MODEL_NAME)
+    preprocessor = joblib.load(base / ARTIFACT_PREPROCESSOR_NAME)
+    vectorizer = joblib.load(base / ARTIFACT_VECTORIZER_NAME)
+    metrics_path = base / "metrics.json"
+    with metrics_path.open(encoding="utf-8") as f:
+        metrics = json.load(f)
+    threshold = float(metrics.get("anomaly_threshold", 0.0))
+    logger.info("Loaded artifacts from %s (threshold=%.4f)", base, threshold)
+    return {
+        "model": model,
+        "preprocessor": preprocessor,
+        "vectorizer": vectorizer,
+        "anomaly_threshold": threshold,
+        "config": config,
+    }
+
+
+def _prepare_logs_dataframe(logs_df: pd.DataFrame, config: PipelineConfig) -> pd.DataFrame:
+    """Prepare raw log DataFrame with SequenceID, BlockId, Content fields for feature engineering."""
+    df = logs_df.copy()
+    validate_schema(df, config)
+    df["SequenceID"] = np.arange(len(df))
+    df["BlockId"] = df["Content"].map(extract_block_id)
+    df["HasBlockId"] = df["BlockId"].notna().astype(int)
+    df["Content"] = df["Content"].fillna("").astype(str)
+    df["ContentLength"] = df["Content"].str.len()
+    df["TokenCount"] = df["Content"].str.split().str.len()
+    return df
+
+
+def score_batch(
+    logs_df: pd.DataFrame,
+    config: PipelineConfig | None = None,
+    artifacts: dict[str, Any] | None = None,
+    artifacts_dir: Path | None = None,
+) -> pd.DataFrame:
+    """
+    Score a batch of log lines for anomalies using a previously trained model (real-time / micro-batch).
+    Logs must contain required columns: LineId, Component, Content, EventId, EventTemplate.
+    Either pass pre-loaded artifacts or artifacts_dir so artifacts are loaded from disk.
+    """
+    config = config or get_default_config()
+    if artifacts is None:
+        artifacts = load_artifacts(config=config, artifacts_dir=artifacts_dir)
+    model = artifacts["model"]
+    preprocessor = artifacts["preprocessor"]
+    vectorizer = artifacts["vectorizer"]
+    threshold = artifacts["anomaly_threshold"]
+
+    prepared = _prepare_logs_dataframe(logs_df, config)
+    labeled = attach_labels(prepared, None)
+    feature_df = engineer_features(labeled)
+    structured_matrix = preprocessor.transform(feature_df)
+    text_matrix = vectorizer.transform(feature_df["Content"])
+    combined_matrix = sparse.hstack([structured_matrix, text_matrix]).tocsr()
+    raw_scores = -model.score_samples(combined_matrix)
+    is_anomaly = (raw_scores >= threshold).astype(int)
+
+    scored_df = feature_df.copy()
+    scored_df["anomaly_score"] = raw_scores
+    scored_df["anomaly_threshold"] = threshold
+    scored_df["is_anomaly"] = is_anomaly
+    scored_df["rank"] = scored_df["anomaly_score"].rank(method="dense", ascending=False).astype(int)
+    logger.info("Scored batch of %d logs: %d anomalies", len(scored_df), int(is_anomaly.sum()))
+    return scored_df

@@ -1,159 +1,161 @@
-## Log Anomaly Detection (HDFS) – Production-Style Demo
+# Real-Time Log Anomaly Detection System
 
-This project implements a production-style **log anomaly detection** workflow on the structured HDFS sample from the LogHub dataset.
+A **production-grade log anomaly detection system** for structured log streams. It trains on historical logs, persists a detector and threshold, and scores new log batches in near real time—suitable for continuous monitoring, micro-batch pipelines, or integration with log shippers and alerting.
 
-It includes:
-- a reusable Python anomaly pipeline
-- a documented Jupyter notebook
-- saved artifacts (scored logs, top anomalies, metrics, serialized model/preprocessor)
+---
+
+## Overview
+
+- **Batch training**: Ingest logs → feature engineering → train Isolation Forest → persist model, preprocessor, vectorizer, and threshold.
+- **Real-time inference**: Load persisted artifacts once; score incoming log batches with `score_batch()` for low-latency anomaly flags and scores.
+- **Hybrid evaluation**: When labels exist, reports precision, recall, F1, ROC-AUC; otherwise runs in unsupervised mode with clear metrics and rankings.
+- **Operational outputs**: Top-N anomalies, score distribution, component/template breakdowns, and optional plots for triage and dashboards.
+
+This repo uses the **HDFS structured log sample** (LogHub) for demonstration; the same pipeline applies to any structured log source with compatible columns.
+
+---
+
+## Architecture
+
+```
+┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
+│  Log ingestion  │────▶│  Feature engine   │────▶│  Anomaly model   │
+│  (file / stream)│     │  (numeric + TF-IDF)│     │  (Isolation Forest)│
+└─────────────────┘     └──────────────────┘     └────────┬────────┘
+                                                          │
+┌─────────────────┐     ┌──────────────────┐              │
+│  Alerts /       │◀────│  score_batch()   │◀─────────────┘
+│  dashboards     │     │  (real-time API) │
+└─────────────────┘     └──────────────────┘
+```
+
+- **Training** (scheduled or on-demand): `run_pipeline()` loads logs, engineers features, fits the model, and writes artifacts to `artifacts/`.
+- **Inference** (real-time / micro-batch): `load_artifacts()` loads the saved model and threshold; `score_batch(logs_df)` returns anomaly scores and binary flags for each row.
 
 ---
 
 ## Project structure
 
-- `Log Anamoly Detetction.ipynb` – main tutorial notebook
-- `log_anomaly_config.py` – configuration and paths for data, artifacts, and model hyperparameters
-- `log_anomaly_pipeline.py` – end-to-end anomaly detection pipeline (data load → features → model → scores → artifacts)
-- `log_anomaly_utils.py` – utilities for block ID extraction, metrics saving, and plotting
-- `data/` – structured HDFS log CSV and optional label files
-- `artifacts/` – generated outputs (scored logs, top anomalies, metrics JSON, model artifacts)
+| Path | Purpose |
+|------|--------|
+| `log_anomaly_config.py` | Configuration, paths, and env overrides (`LOG_ANOMALY_DATA_DIR`, `LOG_ANOMALY_ARTIFACTS_DIR`) |
+| `log_anomaly_pipeline.py` | Training (`run_pipeline`), inference (`load_artifacts`, `score_batch`), and data loading |
+| `log_anomaly_utils.py` | Block ID parsing, metrics I/O, and optional plotting |
+| `Log Anamoly Detetction.ipynb` | Tutorial notebook: EDA, features, training, evaluation, and production notes |
+| `data/` | Input logs (e.g. HDFS CSV); optional labels |
+| `artifacts/` | Persisted model, preprocessor, vectorizer, metrics (with threshold), and scored outputs |
 
 ---
 
 ## Data
 
-The pipeline uses the **HDFS structured logs** sample from LogHub:
-- structured CSV: `HDFS_2k.log_structured.csv`
-- optional labels: `anomaly_label.csv` (block-level anomaly labels)
-
-By default:
-- if `data/HDFS_2k.log_structured.csv` is missing, it is **downloaded automatically**
-- labels are **optional** – the pipeline runs fully in unsupervised mode if they are not present or download is disabled
-
-Key columns:
-- `LineId`, `Date`, `Time`, `Pid`, `Level`, `Component`
-- `Content` (raw log message)
-- `EventId`, `EventTemplate`
-
-The pipeline also:
-- extracts `BlockId` from `Content` when present
-- adds `SequenceID` to preserve log order
+- **Structured logs**: CSV with at least `LineId`, `Component`, `Content`, `EventId`, `EventTemplate`. Optional: `Date`, `Time`, `Pid`, `Level`.
+- **Labels** (optional): CSV with `BlockId` and `Label` for hybrid evaluation.
+- By default, the pipeline can **auto-download** the HDFS sample; override paths and URLs via config or env.
 
 ---
 
-## Environment & dependencies
+## Quick start
 
-Required Python packages (typical environment):
-
-- `pandas`
-- `numpy`
-- `scikit-learn`
-- `requests`
-- `matplotlib` (for plotting in the notebook)
-- `seaborn` (for plotting in the notebook)
-- `joblib`
-
-Install (example with `pip`):
+### 1. Install dependencies
 
 ```bash
-pip install pandas numpy scikit-learn requests matplotlib seaborn joblib
+pip install pandas numpy scikit-learn requests joblib
+# Optional for notebook plots:
+pip install matplotlib seaborn
 ```
 
-The core pipeline code (`run_pipeline`) does **not** require Jupyter; plotting in the notebook uses `matplotlib`/`seaborn` if available.
-
----
-
-## How to run
-
-### 1. Run as a Python pipeline
-
-From the `LogAnamolyDetection` folder:
+### 2. Train and save artifacts (batch)
 
 ```bash
-cd "c:\Users\harsh\MLProjects\ML concepts\MLProjects\LogAnamolyDetection"
-
-python -c "from log_anomaly_pipeline import run_pipeline; result = run_pipeline(); print(result['metrics'])"
+cd LogAnamolyDetection
+python -c "
+from log_anomaly_pipeline import run_pipeline
+result = run_pipeline()
+print('Anomalies:', result['metrics'].get('predicted_anomalies'))
+print('Threshold:', result['metrics'].get('anomaly_threshold'))
+"
 ```
 
-This will:
-- download/load HDFS structured logs (if not present)
-- attach labels if available
-- engineer structured + TF‑IDF features
-- train an **Isolation Forest** model
-- optionally compute a **DBSCAN** comparison signal
-- score and rank anomalies
-- compute hybrid evaluation metrics (unsupervised-only if no labels)
-- save artifacts under `artifacts/`
+This downloads (if needed) and loads logs, trains the detector, and writes to `artifacts/`.
 
-Generated artifacts include:
-- `artifacts/scored_logs.csv` – all logs with anomaly scores and flags
-- `artifacts/top_anomalies.csv` – highest-scoring anomalies for triage
-- `artifacts/metrics.json` – summary metrics (mode, counts, evaluation stats where labels exist)
-- `artifacts/isolation_forest.joblib` – trained Isolation Forest model
-- `artifacts/preprocessor.joblib` – fitted preprocessing pipeline
+### 3. Score new logs (real-time / micro-batch)
 
-### 2. Run the notebook
+```python
+import pandas as pd
+from log_anomaly_pipeline import load_artifacts, score_batch
 
-Open:
+# Load once (e.g. at service startup)
+artifacts = load_artifacts()
 
-- `Log Anamoly Detetction.ipynb`
+# Score each incoming batch
+new_logs = pd.read_csv("path/to/new_logs.csv")  # same schema as training
+scored = score_batch(new_logs, artifacts=artifacts)
+anomalies = scored[scored["is_anomaly"] == 1]
+print(anomalies[["LineId", "Component", "EventTemplate", "anomaly_score"]])
+```
 
-and run all cells from top to bottom.
+Use `score_batch(logs_df, artifacts_dir=Path("artifacts"))` if you prefer loading from disk per call instead of reusing an in-memory `artifacts` dict.
 
-The notebook walks through:
-- problem framing and dataset description
-- schema checks and basic EDA
-- feature engineering choices and rationale
-- model training and anomaly scoring
-- ranked anomalies and hybrid evaluation
-- PCA and auxiliary plots (if plotting libraries are installed)
-- production notes and limitations
+### 4. Run on large volume
+
+To stress-test or run on a large dataset, use `run_large_volume.py`. It builds a big CSV by replicating the sample (or your source file) to the target row count, then runs the full pipeline.
+
+```bash
+cd LogAnamolyDetection
+# 100k rows (default)
+python run_large_volume.py --target-rows 100000
+
+# 500k rows, cap in-memory training at 100k to save RAM
+python run_large_volume.py --target-rows 500000 --max-training-rows 100000
+```
+
+For very large CSVs you already have, set `max_training_rows` in config (or `get_default_config(max_training_rows=100000)`) so the pipeline samples down and avoids OOM.
 
 ---
 
-## Modeling approach
+## Configuration
 
-Core detector:
-- **Isolation Forest** is used as the primary anomaly detector.
+- **Environment**: Set `LOG_ANOMALY_DATA_DIR` and `LOG_ANOMALY_ARTIFACTS_DIR` to override data and artifact paths (e.g. in Docker or cron).
+- **Code**: `get_default_config(contamination=0.1, artifacts_dir=Path("/app/artifacts"), ...)` for programmatic overrides.
+- Key options: `contamination`, `max_training_rows` (cap rows for huge CSVs), `top_n_anomalies`, `max_tfidf_features`, `use_dbscan_comparison`; see `log_anomaly_config.py`.
 
-Comparison:
-- **DBSCAN** can be enabled as a secondary view of outliers; its binary flags and agreement rate with Isolation Forest are exposed in the results for analysis, but it is not the primary production signal.
+---
 
-Feature engineering:
-- numeric features: `SequenceID`, content length, token count, template/component/level frequencies, block frequency, rare-template flag, previous-template/component continuity, rolling template diversity, etc.
-- categorical features: event template, event ID, component, level, block ID (when available), one-hot encoded
-- text features: TF‑IDF over log content
+## Modeling
 
-The combined feature matrix (structured + TF‑IDF) feeds Isolation Forest.
+- **Primary detector**: Isolation Forest on combined numeric + one-hot + TF-IDF features.
+- **Threshold**: Chosen from training scores (e.g. top `contamination` fraction); stored in `artifacts/metrics.json` and used in `score_batch`.
+- **Optional**: DBSCAN comparison for agreement rate and analysis; not required for real-time scoring.
+- **Features**: Sequence and template diversity, component/level frequencies, block IDs, content length, TF-IDF on log content.
 
 ---
 
 ## Evaluation and interpretation
 
-Hybrid evaluation:
-- if labels are available, metrics include precision, recall, F1, ROC‑AUC, PR‑AUC, and a detailed classification report
-- if labels are not available, the metrics clearly report **unsupervised-only** mode and focus on counts, rates, and detector agreement
-
-Interpretability:
-- top‑ranked anomalies with scores and key fields (component, level, template, block ID)
-- anomaly concentration by template and component
-- anomaly score distribution and sequence‑by‑sequence plots
-- PCA projection of anomalies when plotting is enabled
+- **With labels**: Precision, recall, F1, ROC-AUC, PR-AUC, and classification report.
+- **Without labels**: Unsupervised metrics, anomaly rate, detector agreement, and ranked top-N list.
+- **Operational**: Top anomalies CSV, score distribution, and (in the notebook) PCA and template/component anomaly plots.
 
 ---
 
-## Production notes & limitations
+## Production and deployment
 
-This project is designed as a **practical starting point**, not a complete production system:
+- **Logging**: The pipeline uses Python `logging`; configure level and handlers in your app (e.g. `logging.basicConfig(level=logging.INFO)`).
+- **Deployment**: Run training as a scheduled job; run inference in a small service or script that calls `score_batch()` on each micro-batch.
+- **Monitoring**: Track score distribution, anomaly rate, and (if applicable) schema/template drift; retrain when data distribution changes.
 
-- schema validation and data-quality checks should be integrated with ingestion
-- thresholds and contamination rates should be tuned per environment and use case
-- monitoring should include score drift, template drift, and data volume changes
-- session/block/window-level aggregation is often necessary to capture multi-line failures
-- labels in real systems are often delayed or partial; treat metrics as guidance, not absolute truth
+---
 
-The modular structure (config, pipeline, utils) is intended to make it easy to:
-- deploy the pipeline as a scheduled batch job
-- export scores into an alerting or dashboarding system
-- iterate on features and model configuration without rewriting the notebook
+## Limitations
 
+- **Schema**: Input logs must match the expected columns; validate upstream.
+- **Cold start**: First run needs enough history to train; `score_batch` is for scoring after at least one successful `run_pipeline`.
+- **Threshold**: Fixed from training; for evolving streams, consider periodic retraining or dynamic threshold logic.
+- **Scale**: Designed for single-machine, in-memory batches; for very high throughput, consider batching and/or distributed inference.
+
+---
+
+## Run the notebook
+
+Open `Log Anamoly Detetction.ipynb` and run all cells. It walks through data load, EDA, feature engineering, training, evaluation, and artifact usage with production notes.

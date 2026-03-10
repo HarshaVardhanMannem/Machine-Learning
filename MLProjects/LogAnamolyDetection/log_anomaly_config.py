@@ -1,13 +1,24 @@
+"""
+Configuration for the log anomaly detection pipeline and real-time inference.
+
+Supports environment overrides for deployment:
+- LOG_ANOMALY_DATA_DIR: data directory (default: project/data)
+- LOG_ANOMALY_ARTIFACTS_DIR: artifact output directory (default: project/artifacts)
+"""
+
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
 
 BASE_DIR = Path(__file__).resolve().parent
-DATA_DIR = BASE_DIR / "data"
-ARTIFACTS_DIR = BASE_DIR / "artifacts"
+_DATA_DIR_ENV = os.environ.get("LOG_ANOMALY_DATA_DIR")
+_ARTIFACTS_DIR_ENV = os.environ.get("LOG_ANOMALY_ARTIFACTS_DIR")
+DATA_DIR = Path(_DATA_DIR_ENV) if _DATA_DIR_ENV else BASE_DIR / "data"
+ARTIFACTS_DIR = Path(_ARTIFACTS_DIR_ENV) if _ARTIFACTS_DIR_ENV else BASE_DIR / "artifacts"
 
 HDFS_STRUCTURED_URL = (
     "https://raw.githubusercontent.com/logpai/loghub/master/HDFS/"
@@ -21,8 +32,11 @@ HDFS_LABELS_URL = (
 
 @dataclass
 class PipelineConfig:
+    """Central configuration for training and inference; paths respect LOG_ANOMALY_* env vars."""
+
     random_state: int = 42
     contamination: float = 0.05
+    max_training_rows: Optional[int] = None  # If set, sample this many rows when input is larger (for huge CSVs)
     max_tfidf_features: int = 80
     use_dbscan_comparison: bool = True
     dbscan_eps: float = 1.25
@@ -95,6 +109,7 @@ class PipelineConfig:
 
 
 def get_default_config(**overrides: Optional[object]) -> PipelineConfig:
+    """Return default config; any overrides (e.g. artifacts_dir=Path(...)) are applied."""
     config = PipelineConfig()
     for key, value in overrides.items():
         if value is not None:

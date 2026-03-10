@@ -1,8 +1,8 @@
 {
-  "row_count": 100000,
-  "predicted_anomalies": 5000,
+  "row_count": 2000,
+  "predicted_anomalies": 100,
   "predicted_anomaly_rate": 0.05,
-  "detector_agreement_rate": 0.94991,
+  "detector_agreement_rate": 0.05,
   "evaluation_mode": "unsupervised_only",
-  "anomaly_threshold": 0.36791507798576295
+  "anomaly_threshold": 0.3595655632374373
 }
