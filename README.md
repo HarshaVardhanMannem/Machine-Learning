@@ -1,6 +1,36 @@
 # 🤖 Machine Learning — Concepts & Projects
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python 3.8+](https://img.shields.io/badge/Python-3.8%2B-blue.svg)](https://www.python.org/downloads/)
+[![Last Commit](https://img.shields.io/github/last-commit/HarshaVardhanMannem/Machine-Learning)](https://github.com/HarshaVardhanMannem/Machine-Learning/commits/main)
+[![Open Issues](https://img.shields.io/github/issues/HarshaVardhanMannem/Machine-Learning)](https://github.com/HarshaVardhanMannem/Machine-Learning/issues)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+
 > A rigorous collection of Jupyter notebooks and end-to-end projects exploring foundational and intermediate Machine Learning concepts through real-world datasets, controlled experiments, and visualized results.
+
+---
+
+## 📋 Table of Contents
+
+- [Overview](#-overview)
+- [Repository Sections](#️-repository-sections)
+- [ML Concepts Experiments](#-ml-concepts-experiments)
+  - [1. CPU vs. GPU Performance Benchmark](#1-️-cpu-vs-gpu-performance-benchmark)
+  - [2. Standardization in Machine Learning](#2--standardization-in-machine-learning)
+  - [3. Normalization in Machine Learning](#3--normalization-in-machine-learning)
+  - [4. Classification Metrics](#4--classification-metrics-accuracy-precision-recall--f1-score)
+  - [5. Euclidean vs. Manhattan Distance](#5--euclidean-vs-manhattan-distance-in-machine-learning)
+- [Core ML Concepts Covered](#-core-ml-concepts-covered)
+- [ML Projects](#-ml-projects)
+- [Tech Stack](#️-tech-stack)
+- [Repository Structure](#-repository-structure)
+- [Getting Started](#-getting-started)
+- [Engineering Principles Demonstrated](#-engineering-principles-demonstrated)
+- [Contributing](#-contributing)
+- [Changelog](#-changelog)
+- [Acknowledgements](#-acknowledgements)
+- [Author](#-author)
+- [License](#-license)
 
 ---
 
@@ -247,10 +277,46 @@ Navigate to `ML concepts/` or `MLProjects/` and open any notebook to explore.
 
 ---
 
+## 🤝 Contributing
+
+Contributions are welcome and appreciated! Whether it's a new concept notebook, an end-to-end project, a bug fix, or a documentation improvement — please read the [Contributing Guide](CONTRIBUTING.md) before opening a pull request.
+
+**Quick start:**
+```bash
+# Fork and clone the repo
+git clone https://github.com/<your-username>/Machine-Learning.git
+
+# Create a feature branch
+git checkout -b feature/your-feature-name
+
+# Make your changes, then open a PR against main
+```
+
+Please follow the [style guidelines](CONTRIBUTING.md#style-guidelines) and the [PR checklist](CONTRIBUTING.md#pull-request-checklist). All contributors are expected to abide by the [Code of Conduct](CONTRIBUTING.md#code-of-conduct).
+
+---
+
+## 📝 Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for a full history of notable changes, additions, and fixes.
+
+---
+
+## 🙏 Acknowledgements
+
+- [scikit-learn](https://scikit-learn.org/) — the backbone of every experiment and project
+- [PyTorch](https://pytorch.org/) — for the GPU/CPU benchmark
+- [UCI Machine Learning Repository](https://archive.ics.uci.edu/ml/index.php) — for the Breast Cancer Wisconsin and Wine datasets
+- [Loghub](https://github.com/logpai/loghub) — for the HDFS log dataset used in the Log Anomaly Detection project
+- [Keep a Changelog](https://keepachangelog.com/) and [Semantic Versioning](https://semver.org/) — for project changelog conventions
+- [shields.io](https://shields.io/) — for the repository badges
+
+---
+
 ## 👤 Author
 
 **Harsha Vardhan Mannem**  
-[GitHub](https://github.com/HarshaVardhanMannem)
+[GitHub](https://github.com/HarshaVardhanMannem) · [Open an Issue](https://github.com/HarshaVardhanMannem/Machine-Learning/issues)
 
 ---
 
